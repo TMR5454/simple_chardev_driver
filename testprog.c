@@ -12,6 +12,8 @@ int open_close_test(const char *devfile)
 {
 	int fd;
 
+	printf("%s test start\n", __func__);
+
 	printf("invoke open()\n");
 	fd = open(devfile, O_RDWR);
 	if (fd < 0) {
@@ -22,6 +24,32 @@ int open_close_test(const char *devfile)
 	printf("invoke close()\n");
 	close(fd);
 
+	printf("%s test finish\n", __func__);
+	return OK;
+}
+
+int open_close_test2(const char *devfile)
+{
+	#define FDNUM 3
+	int fd[FDNUM];
+	int i;
+
+	printf("%s test start\n", __func__);
+
+	printf("invoke open()\n");
+	for (i = 0; i < FDNUM; i++) {
+		fd[i] = open(devfile, O_RDWR);
+		if (fd[i] < 0) {
+			perror("open");
+			return NG;
+		}
+	}
+	
+	for (i = 0; i < FDNUM; i++) {
+		close(fd[i]);
+	}
+
+	printf("%s test finish\n", __func__);
 	return OK;
 }
 
@@ -35,6 +63,10 @@ int main(int argc, char *argv[])
 	}
 
 	if (open_close_test(argv[1]) == NG) {
+		return NG;
+	}
+
+	if (open_close_test2(argv[1]) == NG) {
 		return NG;
 	}
 
