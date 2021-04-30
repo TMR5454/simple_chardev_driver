@@ -53,6 +53,44 @@ int open_close_test2(const char *devfile)
 	return OK;
 }
 
+
+int read_write_test(const char *devfile)
+{
+	int fd;
+	char string[] = "test!!!!";
+	char buffer[sizeof(string)+1];
+	int ret;
+
+	printf("%s test start\n", __func__);
+
+	fd = open(devfile, O_RDWR);
+	if (fd < 0) {
+		perror("open");
+		return NG;
+	}
+
+	ret = write(fd, string, sizeof(string));
+	if (ret != sizeof(string)) {
+		printf("write() retval : %d\n", ret);
+		return NG;
+	}
+
+	lseek(fd, 0, SEEK_SET);
+
+	ret = read(fd, buffer, sizeof(buffer));
+	if (ret != sizeof(buffer)) {
+		printf("read() retval : %d\n", ret);
+		return NG;
+	}
+
+	printf("%s\n", buffer);
+
+	close(fd);
+
+	printf("%s test finish\n", __func__);
+	return OK;
+}
+
 /* argv[1]: device file (ex. /dev/chardev) */
 int main(int argc, char *argv[])
 {
@@ -67,6 +105,10 @@ int main(int argc, char *argv[])
 	}
 
 	if (open_close_test2(argv[1]) == NG) {
+		return NG;
+	}
+
+	if (read_write_test(argv[1]) == NG) {
 		return NG;
 	}
 
