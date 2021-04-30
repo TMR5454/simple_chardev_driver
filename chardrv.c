@@ -2,6 +2,7 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/mutex.h>
+#include <linux/uaccess.h>
 
 #include "define.h"
 
@@ -72,10 +73,73 @@ static int simple_char_release(struct inode *ip, struct file *fp)
 	return 0;
 }
 
+static ssize_t simple_char_read(struct file *fp, char *buf, size_t count, loff_t *offp)
+{
+	size_t offset = (size_t)*offp;
+	ssize_t len;
+	int ret;
+	struct simple_char_private_data *p = fp->private_data;
+	char *kernel_buffer = p->buffer;
+
+	ret = mutex_lock_interruptible(&p->buffer_lock);
+	if (ret < 0) {
+		return ret;
+	}
+
+	if (offset >= BUF_SIZE) {
+		printk("offset is invalid in %s", __func__);
+		BUG();
+	}
+
+	len = min(count, BUF_SIZE - offset);
+	if (copy_to_user(buf, &kernel_buffer[offset], len)) {
+		return -EFAULT;
+	}
+
+	mutex_unlock(&p->buffer_lock);
+
+	*offp += len;
+
+	return len;
+}
+
+static ssize_t simple_char_write(struct file *fp, const char *buf, size_t count, loff_t *offp)
+{
+	size_t offset = (size_t)*offp;
+	ssize_t len;
+	int ret;
+	struct simple_char_private_data *p = fp->private_data;
+	char *kernel_buffer = p->buffer;
+
+	ret = mutex_lock_interruptible(&p->buffer_lock);
+	if (ret < 0) {
+		return ret;
+	}
+
+	if (offset >= BUF_SIZE) {
+		printk("offset is invalid in %s", __func__);
+		BUG();
+	}
+
+	len = min(count, BUF_SIZE - offset);
+	if (copy_from_user(&kernel_buffer[offset], buf, len)) {
+		return -EFAULT;
+	}
+
+	mutex_unlock(&p->buffer_lock);
+
+	*offp += len;
+
+	return len;
+}
+
 static struct file_operations fops = {
 	.owner = THIS_MODULE,
 	.open = simple_char_open,
 	.release = simple_char_release,
+	.read = simple_char_read,
+	.write = simple_char_write,
+	.llseek = default_llseek,
 };
 
 static int __init simple_char_init(void)
