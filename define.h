@@ -2,6 +2,7 @@
 #define BUF_SIZE 256
 
 struct simple_char_private_data {
-    char *buffer;
-    struct mutex buffer_lock;
+	char *buffer;
+	struct mutex buffer_lock;
+	int ref_count;
 };

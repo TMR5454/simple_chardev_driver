@@ -6,40 +6,68 @@
 #include "define.h"
 
 static int major;
+/* open and close context cant't process as parallel cause of private_data cause of private_data exclusion */
+static DEFINE_MUTEX(private_data_lock);
 
 static int simple_char_open(struct inode *ip, struct file *fp)
 {
 	struct simple_char_private_data *p;
+	int ret = 0;
 
-	p = (struct simple_char_private_data*)kmalloc(sizeof(struct simple_char_private_data), GFP_KERNEL);
-	if (!p) {
-		goto fail_get_private_data;
+	ret = mutex_lock_interruptible(&private_data_lock);
+	if (ret < 0) {
+		return ret;
 	}
 
-	fp->private_data = (void*)p;
+	if (fp->private_data) {
+		goto exit;
+	}
 
-	p->buffer = (char*)kmalloc(BUF_SIZE, GFP_KERNEL);
-	if(!fp->private_data) {
-		goto fail_get_buffer;
+	p = fp->private_data = kmalloc(sizeof(struct simple_char_private_data), GFP_KERNEL);
+	if (!p) {
+		ret = -ENOMEM;
+		goto exit;
 	}
 
 	mutex_init(&p->buffer_lock);
 
-	return 0;
+	p->buffer = kmalloc(BUF_SIZE, GFP_KERNEL);
+	if(!p->buffer) {
+		ret = -ENOMEM;
+		goto fail_get_buffer;
+	}
+
+	goto exit;
 
 fail_get_buffer:
 	kfree(p);
-fail_get_private_data:
-	return -ENOMEM;
+exit:
+	mutex_unlock(&private_data_lock);
+	if (!ret) {
+		p->ref_count++;
+	}
+
+	return ret;
 }
 
 static int simple_char_release(struct inode *ip, struct file *fp)
 {
 	struct simple_char_private_data *p = fp->private_data;
+	int ret;
 
-	mutex_destroy(&p->buffer_lock);
-	kfree(p->buffer);
-	kfree(p);
+	ret = mutex_lock_interruptible(&private_data_lock);
+	if (ret < 0) {
+		return ret;
+	}
+
+	p->ref_count--;
+	if (!p->ref_count) {
+		mutex_destroy(&p->buffer_lock);
+		kfree(p->buffer);
+		kfree(p);
+	}
+
+	mutex_unlock(&private_data_lock);
 
 	return 0;
 }
